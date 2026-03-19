@@ -41,43 +41,46 @@ class YouTube(commands.Cog):
             if not feed.entries:
                 continue
 
-            latest_entry = feed.entries[0]
-            video_id = latest_entry.get("yt_videoid")
-
             async with self.bot.db.execute(
                 "SELECT channel_id FROM youtube_history WHERE channel_id = ?",
                 (yt_id,)
             ) as cursor:
                 has_history = await cursor.fetchone()
 
-            async with self.bot.db.execute(
-                "SELECT video_id FROM youtube_history WHERE channel_id = ? AND video_id = ?",
-                (yt_id, video_id)
-            ) as cursor:
-                row = await cursor.fetchone()
-
-            if row is None:
-                await self.bot.db.execute(
-                    "INSERT INTO youtube_history (channel_id, video_id) VALUES (?, ?)",
-                    (yt_id, video_id)
-                )
-                await self.bot.db.execute(
-                    "INSERT OR REPLACE INTO youtube (channel_id, last_video) VALUES (?, ?)",
-                    (yt_id, video_id)
-                )
-                await self.bot.db.commit()
-
-                if has_history is None:
+            # Process all entries in reverse order (oldest to newest) to handle any missed videos
+            for entry in reversed(feed.entries):
+                video_id = entry.get("yt_videoid")
+                if not video_id:
                     continue
 
-                embed = discord.Embed(
-                    title=f"🎥 {latest_entry.author} just posted a video! Go check it out!",
-                    description=f"**[{latest_entry.title}](https://www.youtube.com/watch?v={video_id})**",
-                    color=discord.Color.red()
-                )
-                embed.set_image(url=f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg")
+                async with self.bot.db.execute(
+                    "SELECT video_id FROM youtube_history WHERE channel_id = ? AND video_id = ?",
+                    (yt_id, video_id)
+                ) as cursor:
+                    row = await cursor.fetchone()
 
-                await channel.send(content="Hey! @everyone", embed=embed)
+                if row is None:
+                    await self.bot.db.execute(
+                        "INSERT INTO youtube_history (channel_id, video_id) VALUES (?, ?)",
+                        (yt_id, video_id)
+                    )
+                    await self.bot.db.execute(
+                        "INSERT OR REPLACE INTO youtube (channel_id, last_video) VALUES (?, ?)",
+                        (yt_id, video_id)
+                    )
+                    await self.bot.db.commit()
+
+                    if has_history is None:
+                        continue
+
+                    embed = discord.Embed(
+                        title=f"🎥 {entry.author} just posted a video! Go check it out!",
+                        description=f"**[{entry.title}](https://www.youtube.com/watch?v={video_id})**",
+                        color=discord.Color.red()
+                    )
+                    embed.set_image(url=f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg")
+
+                    await channel.send(content="Hey! @everyone", embed=embed)
 
     @check.before_loop
     async def before_check(self):
