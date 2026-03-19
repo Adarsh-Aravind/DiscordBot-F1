@@ -1,83 +1,73 @@
-# Bit_Bot
+# Bit Beast Bot
 
-**Bit_Bot** is a lightweight, fully-featured, and customizable Discord bot designed for server management, continuous user engagement, and real-time utilities. Built with `discord.py`, it features a modular cog-based architecture optimizing resource efficiency, making it perfect for personal deployment or small-to-medium server administration.
-
-**Topics:** `discord-bot` `python` `f1-api` `discord-py` `anti-spam` `leveling-system` `youtube-notifications`
-
----
+Bit Beast Bot is a modular and efficient Discord bot built with Python and `discord.py`. Designed for seamless server management and user engagement, it features a Cog-based architecture that provides various administrative tools, automated moderation, content notifications, and entertainment modules.
 
 ## Features
 
-- **Automated Anti-Spam (Auto-Moderation)**: Actively monitors chat to restrict invite links, mass mentions, and excessive emojis, enforcing automatic timeouts and message deletion to preserve server integrity.
-- **YouTube Notifications**: Integrates with YouTube to automatically announce new video uploads from monitored channels via customized, rich embeds.
-- **Formula 1 Integration**: Fetches real-time driver and constructor standings, provides upcoming race schedules with official track layouts, and offers historical race information.
-- **Automated Leveling System**: Features an SQLite-backed XP and leveling architecture to passively track user engagement, allowing users to rank up through active chat participation.
-- **Direct Message (DM) Relay**: Automatically intercepts and forwards DMs sent to the bot directly to the configured bot owner.
-- **Remote Channel Messaging**: Allows the bot owner to proxy messages to any server channel remotely or reply to specific users via direct DMs.
-- **Modular Design**: Developed using `discord.py` Cogs for dynamic reloading, simple maintenance, and easy feature addition.
+- **Automated Moderation (Anti-Spam)**: Actively monitors messages to detect and mitigate spam, including excessive links, mentions, and formatting abuse. Enforces timeouts and deletions automatically.
+- **YouTube Notifications**: Monitors specified YouTube channels and alerts your Discord server of new video uploads with rich embedded messages.
+- **Formula 1 Integration**: Delivers real-time F1 driver and constructor standings, upcoming race schedules with track layouts, and historical race data.
+- **Experience and Leveling System**: Tracks user engagement through an SQLite database, passively awarding XP and roles to active participants.
+- **Remote Channel Messaging**: Empowers bot administrators to proxy messages to specific channels or reply to direct messages securely.
 
-## Prerequisites
+## Requirements
 
-- Python 3.8+
-- A valid Discord Bot Token from the [Discord Developer Portal](https://discord.com/developers/applications)
+- Python 3.8 or higher
+- `discord.py` and other required libraries (see `requirements.txt`)
+- A valid Discord Bot Token
 
-## Installation
+## Installation and Setup
 
-1. **Clone the repository**:
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/Adarsh-Aravind/Discord-Bot.git
-   cd Bit_Bot
+   cd Discord-Bot
    ```
 
-2. **Install dependencies**:
+2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Database Setup**:
-   The bot utilizes `aiosqlite` for persistent storage (Leveling & YouTube history) and will automatically generate a localized `database.db` file upon its first successful boot.
-
-## Configuration
-
-1. Create a `.env` file in the root directory:
+3. **Configure Environment Variables:**
+   Create a `.env` file in the root directory and define the following variables:
    ```env
-   DISCORD_TOKEN=your_discord_bot_token_here
-   ALLOWED_YT_CHANNEL=optional_discord_channel_id_for_yt_links
+   DISCORD_TOKEN=your_bot_token_here
    ```
-2. **Owner Verification**: The Owner ID is verified within `cogs/messaging.py` and `cogs/general.py`. Before deployment, ensure you replace `OWNER_ID = <your_id_here>` with your personal Discord User ID to utilize restricted commands.
 
-## Usage
+4. **Bot Ownership Configuration:**
+   Update the `OWNER_ID` variable in `cogs/messaging.py` and `cogs/general.py` with your personal Discord User ID to permit administrative commands.
 
-Start the bot locally or on your hosting environment:
-```bash
-python main.py
-```
+5. **Run the bot:**
+   ```bash
+   python main.py
+   ```
+   *Note: An SQLite database will be automatically generated upon initial boot to handle leveling and YouTube notification history.*
 
-### Commands (Owner / Administrator)
-*The default command prefix is `#`.*
+## Command Reference
 
-| Command | Usage | Description |
-| :--- | :--- | :--- |
-| `#reply` | `#reply <user_id> <message>` | Prompts the bot to send a direct message to a targeted user. |
-| `#say` | `#say <channel_id> <message>` | Prompts the bot to relay a message into a specified server channel. |
-| `#setpresence` | `#setpresence <type> <text>` | Updates the bot's custom Discord activity status natively (e.g., Playing, Watching). |
-| `#levelreset` | `#levelreset [user]` | Flushes a specific user's XP/level data, or completely truncates the leveling database if no target is specified. |
+The default command prefix is `#`.
 
-### Commands (Public)
+### Administrator Commands
+- `#reply <user_id> <message>`: Sends a direct message to a user.
+- `#say <channel_id> <message>`: Relays a message to a specific channel.
+- `#setpresence <type> <text>`: Updates the bot's rich presence status (e.g., playing, watching).
+- `#levelreset [user]`: Resets XP and level data for a specific user, or truncates the database if left blank.
 
-| Command | Description |
-| :--- | :--- |
-| `#help` | Renders a custom, embedded help menu displaying public commands. |
-| `#f1` | Outputs the current Formula 1 season snapshot (Top Drivers, Constructors, Next Race details). |
-| `#f1next` | Yields detailed scheduling, location information, and an official layout map for the immediate upcoming F1 race. |
-| `#f1last` | Provides comprehensive results and metrics for the most recently completed F1 race. |
-| `#f1c {circuit}` | Queries a specific F1 circuit (e.g., "Miami") to fetch layout details, recent results, and historical data. |
-| `#f1con` | Isolates and displays the current top 10 F1 constructor standings. |
-| `#f1dri` | Isolates and displays the current top 10 F1 driver standings. |
-| `#status` | Fetches and calculates basic diagnostic metrics regarding the host Discord server. |
-| `#ping` | Evaluates and returns the bot's current API latency. |
-| `#rank` | Displays an interactive embed of the user's localized XP and level progress. |
+### Public Commands
+- `#help`: Displays a list of available commands.
+- `#status`: Shows current server statistics and health metrics.
+- `#ping`: Evaluates the bot API response latency.
+- `#rank`: Displays the user's localized XP and level progression.
 
-## Open Source & Contribution
+**F1 Module Commands**
+- `#f1`: Displays a snapshot of the current season standings and next race.
+- `#f1next`: Provides schedule and track information for the upcoming race.
+- `#f1last`: Retrieves results for the most recently completed race.
+- `#f1c {circuit}`: Queries details and history for a specific circuit.
+- `#f1con`: Outputs constructor standings.
+- `#f1dri`: Outputs driver standings.
 
-This project is fully open-source. Feel free to fork, experiment, and implement your own custom Python Cogs for further utility.
+## Contributing
+
+Contributions, issues, and feature requests are welcome. Feel free to check the issues page or fork the repository to implement new Cogs and functionality.
