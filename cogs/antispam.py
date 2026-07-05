@@ -1,4 +1,4 @@
-﻿import discord
+import discord
 from discord.ext import commands
 import re
 import datetime
@@ -33,11 +33,31 @@ class AntiSpam(commands.Cog):
             return
 
         # -------------------------
+        # Promotion channel rules
+        # -------------------------
+        PROMO_CHANNEL_ID = 764832907260198965
+        ADMIN_ROLE_ID = 666859807877365801
+
+        if message.channel.id == PROMO_CHANNEL_ID:
+            if not YOUTUBE_PATTERN.search(message.content):
+                try:
+                    await message.delete()
+                    await message.channel.send(
+                        f"{message.author.mention} This channel is a promotion channel for YouTube links only.",
+                        delete_after=WARNING_DELETE_AFTER
+                    )
+                except Exception:
+                    pass
+                return
+
+        # -------------------------
         # Block @everyone / @here
         # -------------------------
         if message.mention_everyone:
-            await self.punish(message, "Mass mention (@*everyone / @*here) is not allowed")
-            return
+            has_admin = hasattr(message.author, 'roles') and any(role.id == ADMIN_ROLE_ID for role in message.author.roles)
+            if not has_admin:
+                await self.punish(message, "Mass mention (@everyone / @here) is only allowed for admins")
+                return
 
         # -------------------------
         # Block mass user mentions
