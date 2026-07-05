@@ -13,7 +13,8 @@ class Messaging(commands.Cog):
             return
 
         if isinstance(message.channel, discord.DMChannel):
-            owner = await self.bot.fetch_user(OWNER_ID)
+            # Prefer the cache; only hit the API if the owner isn't cached.
+            owner = self.bot.get_user(OWNER_ID) or await self.bot.fetch_user(OWNER_ID)
 
             embed = discord.Embed(
                 title=f"📩 DM from {message.author}",

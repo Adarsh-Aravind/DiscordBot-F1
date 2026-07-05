@@ -23,33 +23,28 @@ class Leveling(commands.Cog):
         ) as cursor:
             row = await cursor.fetchone()
 
-        if row is None:
-            xp = xp_gain
-            level = 0
-            await self.bot.db.execute(
-                "INSERT INTO levels VALUES (?, ?, ?)",
-                (message.author.id, xp, level)
-            )
-        else:
-            xp, level = row
-            xp += xp_gain
+        xp, level = row if row else (0, 0)
+        xp += xp_gain
 
         new_level = int(math.sqrt(xp) // 10)
-
-        # 🔥 Level Up Notification
-        if new_level > level:
+        leveled_up = new_level > level
+        if leveled_up:
             level = new_level
 
+        # Single upsert handles both new and existing users (no redundant
+        # INSERT + UPDATE for first-time messagers).
+        await self.bot.db.execute(
+            "INSERT INTO levels (user_id, xp, level) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET xp = excluded.xp, level = excluded.level",
+            (message.author.id, xp, level)
+        )
+        await self.bot.db.commit()
+
+        # 🔥 Level Up Notification (after the write is committed)
+        if leveled_up:
             await message.channel.send(
                 f"🎉 **{message.author.name}** has reached level **{level}**!"
             )
-
-        await self.bot.db.execute(
-            "UPDATE levels SET xp = ?, level = ? WHERE user_id = ?",
-            (xp, level, message.author.id)
-        )
-
-        await self.bot.db.commit()
 
     @commands.command()
     async def rank(self, ctx):

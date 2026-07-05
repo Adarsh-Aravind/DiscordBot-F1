@@ -23,6 +23,12 @@ bot = commands.Bot(
 async def setup_hook():
     bot.db = await aiosqlite.connect("database.db")
 
+    # WAL + relaxed sync: leveling writes on every message, so avoid an fsync
+    # per commit. WAL keeps concurrent reads fast; synchronous=NORMAL stays
+    # durable across app crashes (only risks the last commit on OS/power loss).
+    await bot.db.execute("PRAGMA journal_mode=WAL")
+    await bot.db.execute("PRAGMA synchronous=NORMAL")
+
     await bot.db.execute("""
     CREATE TABLE IF NOT EXISTS levels (
         user_id INTEGER PRIMARY KEY,
@@ -46,6 +52,13 @@ async def setup_hook():
     )
     """)
 
+    await bot.db.execute("""
+    CREATE TABLE IF NOT EXISTS kick_streams (
+        slug TEXT PRIMARY KEY,
+        last_stream_id TEXT
+    )
+    """)
+
     # Migrate existing last_video to history to avoid re-notifying
     await bot.db.execute("""
     INSERT OR IGNORE INTO youtube_history (channel_id, video_id)
@@ -60,6 +73,7 @@ async def setup_hook():
         "cogs.leveling",
         "cogs.antispam",
         "cogs.youtube",
+        "cogs.kick",
         "cogs.f1"
     ]:
         await bot.load_extension(ext)

@@ -1,43 +1,66 @@
 import discord
 from discord.ext import commands
-import urllib.request
-import json
+import aiohttp
+import asyncio
+import time
 from datetime import datetime, timedelta
 import pytz
+
+# How long (seconds) to reuse a cached API response. F1 standings/schedule
+# data changes at most once per race weekend, so a few minutes is plenty and
+# keeps repeated commands from hammering the upstream API.
+CACHE_TTL = 300
 
 class F1Command(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.base_url = "https://api.jolpi.ca/ergast/f1/current"
         self.headers = {"User-Agent": "BitBot/1.0"}
+        self._session = None
+        self._cache = {}  # endpoint -> (expiry_monotonic, data)
 
-    def _fetch_data(self, endpoint):
-        req = urllib.request.Request(f"{self.base_url}/{endpoint}", headers=self.headers)
+    async def _get_session(self):
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(headers=self.headers)
+        return self._session
+
+    def cog_unload(self):
+        if self._session and not self._session.closed:
+            asyncio.create_task(self._session.close())
+
+    async def _fetch_data(self, endpoint):
+        cached = self._cache.get(endpoint)
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
         try:
-            with urllib.request.urlopen(req) as response:
-                return json.loads(response.read().decode())
+            session = await self._get_session()
+            async with session.get(f"{self.base_url}/{endpoint}", timeout=15) as response:
+                response.raise_for_status()
+                data = await response.json()
         except Exception as e:
             print(f"Error fetching {endpoint}: {e}")
             return None
+        self._cache[endpoint] = (time.monotonic() + CACHE_TTL, data)
+        return data
 
-    def _get_driver_standings(self):
-        data = self._fetch_data("driverStandings.json")
+    async def _get_driver_standings(self):
+        data = await self._fetch_data("driverStandings.json")
         try:
             standings = data['MRData']['StandingsTable']['StandingsLists'][0]['DriverStandings']
             return standings[:10] # Top 10
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, TypeError):
             return []
 
-    def _get_constructor_standings(self):
-        data = self._fetch_data("constructorStandings.json")
+    async def _get_constructor_standings(self):
+        data = await self._fetch_data("constructorStandings.json")
         try:
             standings = data['MRData']['StandingsTable']['StandingsLists'][0]['ConstructorStandings']
             return standings[:10] # Top 10
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, TypeError):
             return []
 
-    def _get_next_race(self):
-        data = self._fetch_data("races.json")
+    async def _get_next_race(self):
+        data = await self._fetch_data("races.json")
         try:
             races = data['MRData']['RaceTable']['Races']
             now_utc = datetime.now(pytz.utc)
@@ -128,7 +151,7 @@ class F1Command(commands.Cog):
     @commands.command(name="f1next")
     async def f1_next(self, ctx):
         async with ctx.typing():
-            next_race = self._get_next_race()
+            next_race = await self._get_next_race()
             if not next_race:
                 await ctx.send("Could not retrieve next race info.")
                 return
@@ -149,23 +172,25 @@ class F1Command(commands.Cog):
     @commands.command(name="f1dri")
     async def f1_drivers(self, ctx):
         async with ctx.typing():
-            standings = self._get_driver_standings()
+            standings = await self._get_driver_standings()
             embed = discord.Embed(title="🏎️ F1 Driver Standings", description=self._build_driver_embed(standings), color=discord.Color.red())
             await ctx.send(embed=embed)
 
     @commands.command(name="f1con")
     async def f1_constructors(self, ctx):
         async with ctx.typing():
-            standings = self._get_constructor_standings()
+            standings = await self._get_constructor_standings()
             embed = discord.Embed(title="🏎️ F1 Constructor Standings", description=self._build_constructor_embed(standings), color=discord.Color.red())
             await ctx.send(embed=embed)
 
     @commands.command(name="f1")
     async def f1_all(self, ctx):
         async with ctx.typing():
-            drivers = self._get_driver_standings()
-            constructors = self._get_constructor_standings()
-            next_race = self._get_next_race()
+            drivers, constructors, next_race = await asyncio.gather(
+                self._get_driver_standings(),
+                self._get_constructor_standings(),
+                self._get_next_race(),
+            )
 
             embed = discord.Embed(title="🏎️ F1 Current Season Info", color=discord.Color.red())
             embed.add_field(name="Drivers (Top 10)", value=self._build_driver_embed(drivers) or "N/A", inline=False)
@@ -181,7 +206,7 @@ class F1Command(commands.Cog):
     async def f1_circuit(self, ctx, *, search_term: str):
         async with ctx.typing():
             # Get current season circuits first (to prioritize active tracks like Albert Park over Adelaide for "Australia")
-            current_circuits_data = self._fetch_data("circuits.json")
+            current_circuits_data = await self._fetch_data("circuits.json")
             circuits = []
             if current_circuits_data:
                 circuits.extend(current_circuits_data['MRData']['CircuitTable']['Circuits'])
@@ -206,7 +231,7 @@ class F1Command(commands.Cog):
             
             # If not found in current calendar, search all historical circuits
             if not found_circuit:
-                all_circuits_data = self._fetch_data("circuits.json?limit=1000") # using 1000 to get all historical
+                all_circuits_data = await self._fetch_data("circuits.json?limit=1000") # using 1000 to get all historical
                 if all_circuits_data:
                     all_circuits = all_circuits_data['MRData']['CircuitTable']['Circuits']
                     found_circuit = search_circuit_list(all_circuits)
@@ -219,7 +244,7 @@ class F1Command(commands.Cog):
             
             # Now fetch the latest race results for this circuit
             # /circuits/<circuitId>/races.json gives all races at this circuit.
-            races_data = self._fetch_data(f"circuits/{circuit_id}/races.json?limit=100")
+            races_data = await self._fetch_data(f"circuits/{circuit_id}/races.json?limit=100")
             
             last_winner = "Unknown"
             last_year = "Unknown"
@@ -232,7 +257,7 @@ class F1Command(commands.Cog):
                 round_num = last_race['round']
                 
                 # Fetch results for that specific race to find the winner
-                results_data = self._fetch_data(f"{last_year}/{round_num}/results.json")
+                results_data = await self._fetch_data(f"{last_year}/{round_num}/results.json")
                 if results_data and results_data['MRData']['RaceTable']['Races']:
                     try:
                         winner = results_data['MRData']['RaceTable']['Races'][0]['Results'][0]['Driver']
@@ -258,7 +283,7 @@ class F1Command(commands.Cog):
     @commands.command(name="f1last")
     async def f1_last(self, ctx):
         async with ctx.typing():
-            data = self._fetch_data("races.json")
+            data = await self._fetch_data("races.json")
             try:
                 races = data['MRData']['RaceTable']['Races']
                 now_utc = datetime.now(pytz.utc)
