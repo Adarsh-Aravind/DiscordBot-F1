@@ -7,8 +7,10 @@ A modular and efficient Discord bot built with Python and `discord.py`. Designed
 *   **Automated Moderation**: Actively monitors messages to detect and mitigate spam, including excessive links, mentions, and formatting abuse. Includes designated promotion channel rules (restricting posts to YouTube links only) and restricts `@everyone`/`@here` mentions to admin roles.
 *   **YouTube Notifications**: Monitors specified YouTube channels and alerts your Discord server of new video uploads.
 *   **Kick Live Notifications**: Polls specified Kick channels and alerts your Discord server when a streamer goes live.
+*   **Creator Milestones**: Announces follower/subscriber milestones for tracked YouTube and Kick channels.
 *   **Formula 1 Integration**: Delivers real-time F1 driver and constructor standings, upcoming race schedules with track layouts, and historical race data.
 *   **Experience & Leveling**: Tracks user engagement through a local SQLite database, awarding XP and managing level progression.
+*   **Warning & Timeout System**: Allows moderators to issue warnings and automatically applies timeouts upon reaching thresholds (e.g., 3rd or 5th warning).
 *   **Remote Messaging**: Empowers bot administrators to proxy messages to specific channels or reply to direct messages securely.
 
 ## System Requirements
@@ -47,7 +49,7 @@ A modular and efficient Discord bot built with Python and `discord.py`. Designed
     *The Kick channel(s) to monitor are configured in the `CHANNELS` map in `cogs/kick.py` (default: `abitbeast`).*
 
 4.  **Bot Ownership Configuration**
-    Update the `OWNER_ID` variable in the relevant cog files (`cogs/messaging.py` and `cogs/general.py`) with your Personal Discord User ID to permit administrative commands.
+    Update the `OWNER_IDS` set in `main.py` with the Personal Discord User IDs of the bot administrators to permit administrative commands.
 
 5.  **Running the Bot**
     ```bash
@@ -59,11 +61,15 @@ A modular and efficient Discord bot built with Python and `discord.py`. Designed
 
 The default command prefix is `#`.
 
-### Administrative Commands
+### Administrative & Moderation Commands
 *   `#reply <user_id> <message>`: Sends a direct message to a user.
 *   `#say <channel_id> <message>`: Relays a message to a specific channel.
 *   `#setpresence <type> <text>`: Updates the bot's rich presence status.
 *   `#levelreset [user]`: Resets XP and level data for a specific user, or truncates the database if left blank.
+*   `#warn <member> <reason>`: Warns a member and applies auto-timeouts on specific thresholds.
+*   `#warnings <member>`: Lists a member's warnings.
+*   `#clearwarns <member>`: Clears all warnings for a member.
+*   `#delwarn <id>`: Deletes a specific warning.
 
 ### General Commands
 *   `#help`: Displays a list of available commands.
@@ -88,7 +94,9 @@ This bot utilizes `discord.ext.commands.Cog` to compartmentalize functionality:
 *   `antispam`: Message monitoring and automated moderation.
 *   `youtube`: Automated YouTube upload feeds.
 *   `kick`: Kick live-stream "went live" notifications.
+*   `milestones`: YouTube and Kick subscriber/follower milestone announcements.
 *   `f1`: Real-time and historical Formula 1 data retrieval.
+*   `warnings`: Moderator warning and automatic timeout system.
 
 ## License
 

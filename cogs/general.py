@@ -1,13 +1,11 @@
 import discord
 from discord.ext import commands
 
-OWNER_ID = 615174036733034538
-
 class General(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.hybrid_command(name="ping", description="Show the bot's latency")
     async def ping(self, ctx):
         await ctx.send(f"Pong! {round(self.bot.latency * 1000)}ms")
 
@@ -19,7 +17,9 @@ class General(commands.Cog):
         )
 
         embed.add_field(name="🏎️ F1 Commands", value="`#f1` - Shows current season info (Drivers, Constructors, Next Race)\n`#f1next` - Shows info and a picture of the next race circuit\n`#f1last` - Shows info and results of the latest race\n`#f1c {circuit}` - Shows information and previous winner for a specific circuit\n`#f1con` - Shows only constructor standings\n`#f1dri` - Shows only driver standings", inline=False)
-        embed.add_field(name="⚙️ General", value="`#status` - Shows the status of the server\n`#ping` - Shows the bot's latency", inline=False)
+        embed.add_field(name="📊 Leveling", value="`#rank [@user]` - Show level, XP and position\n`#leaderboard` (`#top`) - Top 10 members by XP", inline=False)
+        embed.add_field(name="🛡️ Moderation", value="`#warn @user [reason]` - Warn a member\n`#warnings @user` - List a member's warnings\n`#clearwarns @user` - Clear all warnings\n`#delwarn <id>` - Remove a single warning", inline=False)
+        embed.add_field(name="⚙️ General", value="`#status` - Shows the status of the server\n`#ping` - Shows the bot's latency\n*Most commands also work as `/` slash commands.*", inline=False)
 
         await ctx.send(embed=embed)
 
@@ -42,9 +42,24 @@ class General(commands.Cog):
             
         await ctx.send(embed=embed)
 
+    @commands.command(name="sync")
+    async def sync(self, ctx):
+        """Register slash commands. Run once (owner only) after deploying."""
+        if not await self.bot.is_owner(ctx.author):
+            return
+
+        if ctx.guild:
+            # Guild sync is instant (global sync can take up to an hour).
+            self.bot.tree.copy_global_to(guild=ctx.guild)
+            synced = await self.bot.tree.sync(guild=ctx.guild)
+        else:
+            synced = await self.bot.tree.sync()
+
+        await ctx.send(f"✅ Synced {len(synced)} slash command(s).")
+
     @commands.command(name="setpresence")
     async def set_presence(self, ctx, activity_type: str, *, text: str):
-        if ctx.author.id != OWNER_ID:
+        if not await self.bot.is_owner(ctx.author):
             return
 
         activity_type = activity_type.lower()

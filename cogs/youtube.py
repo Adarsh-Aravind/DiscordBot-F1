@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 import feedparser
 import aiohttp
+import asyncio
 
 import os
 
@@ -11,13 +12,40 @@ CHANNELS = {
     "UCKK4jwSOaKBSTqQjNRbndng": int(os.getenv("YT_CHANNEL_3", 0))
 }
 
+# Retry transient failures (e.g. DNS blips) before giving up on this cycle
+FETCH_RETRIES = 3
+RETRY_BACKOFF = 3  # seconds between attempts
+
 class YouTube(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.session = None
         self.check.start()
+
+    async def cog_load(self):
+        # One shared session so aiohttp can cache DNS and reuse connections
+        self.session = aiohttp.ClientSession()
 
     def cog_unload(self):
         self.check.cancel()
+        if self.session:
+            asyncio.create_task(self.session.close())
+
+    async def _fetch_feed(self, yt_id):
+        url = f"https://www.youtube.com/feeds/videos.xml?channel_id={yt_id}"
+        last_error = None
+        for attempt in range(FETCH_RETRIES):
+            try:
+                async with self.session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                    if response.status != 200:
+                        return None
+                    return await response.read()
+            except Exception as e:
+                last_error = e
+                if attempt < FETCH_RETRIES - 1:
+                    await asyncio.sleep(RETRY_BACKOFF)
+        print(f"Error fetching YouTube feed for {yt_id} after {FETCH_RETRIES} attempts: {last_error}")
+        return None
 
     @tasks.loop(minutes=5)
     async def check(self):
@@ -26,14 +54,8 @@ class YouTube(commands.Cog):
             if not channel:
                 continue
 
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://www.youtube.com/feeds/videos.xml?channel_id={yt_id}", timeout=15) as response:
-                        if response.status != 200:
-                            continue
-                        content = await response.read()
-            except Exception as e:
-                print(f"Error fetching YouTube feed for {yt_id}: {e}")
+            content = await self._fetch_feed(yt_id)
+            if content is None:
                 continue
 
             feed = feedparser.parse(content)

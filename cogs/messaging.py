@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 
+# Primary owner: DMs sent to the bot are relayed to this user.
 OWNER_ID = 615174036733034538
 
 class Messaging(commands.Cog):
@@ -33,7 +34,7 @@ class Messaging(commands.Cog):
 
     @commands.command()
     async def reply(self, ctx, user_id: int, *, content):
-        if ctx.author.id != OWNER_ID:
+        if not await self.bot.is_owner(ctx.author):
             return
 
         user = await self.bot.fetch_user(user_id)
@@ -42,7 +43,7 @@ class Messaging(commands.Cog):
 
     @commands.command()
     async def say(self, ctx, channel_id: int, *, content):
-        if ctx.author.id != OWNER_ID:
+        if not await self.bot.is_owner(ctx.author):
             return
 
         channel = await self.bot.fetch_channel(channel_id)
