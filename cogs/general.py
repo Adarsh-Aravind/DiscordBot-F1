@@ -20,6 +20,7 @@ class General(commands.Cog):
         embed.add_field(name="📊 Leveling", value="`#rank [@user]` - Show level, XP and position\n`#leaderboard` (`#top`) - Top 10 members by XP", inline=False)
         embed.add_field(name="🛡️ Moderation", value="`#warn @user [reason]` - Warn a member\n`#warnings @user` - List a member's warnings\n`#clearwarns @user` - Clear all warnings\n`#delwarn <id>` - Remove a single warning", inline=False)
         embed.add_field(name="⚙️ General", value="`#status` - Shows the status of the server\n`#ping` - Shows the bot's latency\n*Most commands also work as `/` slash commands.*", inline=False)
+        embed.add_field(name="🔔 Automatic", value="These run in the background — no command needed:\n• **YouTube alerts** - Posts when tracked channels upload a new video\n• **Kick live alerts** - Posts when a tracked streamer goes live\n• **Creator milestones** - Announces subscriber/follower milestones\n• **Auto-moderation** - Filters spam, link/mention abuse and enforces promo channel rules", inline=False)
 
         await ctx.send(embed=embed)
 
