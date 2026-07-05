@@ -77,7 +77,7 @@ class AntiSpam(commands.Cog):
         # Restrict YouTube links
         # -------------------------
         if YOUTUBE_PATTERN.search(message.content):
-            if message.channel.id != ALLOWED_YT_CHANNEL:
+            if message.channel.id not in (ALLOWED_YT_CHANNEL, PROMO_CHANNEL_ID):
                 await message.delete()
                 await message.channel.send(
                     f"{message.author.mention} YouTube links are only allowed in the designated channel.",
