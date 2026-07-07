@@ -1,7 +1,8 @@
 import discord
 from discord.ext import commands, tasks
-import aiohttp
+from curl_cffi.requests import AsyncSession
 import os
+from datetime import datetime
 
 # Kick slug -> Discord channel id to announce in.
 # Set KICK_CHANNEL_1 to the Discord channel where "went live" alerts should go.
@@ -10,18 +11,9 @@ CHANNELS = {
 }
 
 CHECK_INTERVAL_MINUTES = 2
+LOGGING_CHANNEL_ID = 830364694916890674
 
-# Kick sits behind Cloudflare and 403s requests without a realistic browser
-# fingerprint, so send full browser-like headers.
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-}
-
+# Headers are no longer manually needed with curl_cffi as it handles impersonation
 
 class Kick(commands.Cog):
     def __init__(self, bot):
@@ -30,17 +22,27 @@ class Kick(commands.Cog):
         self.check.start()
 
     async def _get_session(self):
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(headers=HEADERS)
+        if self._session is None or getattr(self._session, "closed", False):
+            self._session = AsyncSession(impersonate="chrome")
         return self._session
 
     def cog_unload(self):
         self.check.cancel()
-        if self._session and not self._session.closed:
-            self.bot.loop.create_task(self._session.close())
+        if self._session and not getattr(self._session, "closed", False):
+            # Try to close safely if it has a close method
+            if hasattr(self._session, "close"):
+                if __import__("asyncio").iscoroutinefunction(self._session.close):
+                    self.bot.loop.create_task(self._session.close())
+                else:
+                    self._session.close()
 
     @tasks.loop(minutes=CHECK_INTERVAL_MINUTES)
     async def check(self):
+        # Only check/notify during evening hours (5 PM to 11:59 PM)
+        current_hour = datetime.now().hour
+        if not (17 <= current_hour <= 23):
+            return
+
         for slug, discord_channel_id in CHANNELS.items():
             channel = self.bot.get_channel(discord_channel_id)
             if not channel:
@@ -48,15 +50,24 @@ class Kick(commands.Cog):
 
             try:
                 session = await self._get_session()
-                async with session.get(
+                response = await session.get(
                     f"https://kick.com/api/v2/channels/{slug}",
-                    timeout=aiohttp.ClientTimeout(total=15),
-                ) as response:
-                    if response.status != 200:
-                        continue
-                    data = await response.json()
+                    timeout=15,
+                )
+                if response.status_code != 200:
+                    msg = f"⚠️ Kick API returned `{response.status_code}` for `{slug}`"
+                    print(msg)
+                    log_channel = self.bot.get_channel(LOGGING_CHANNEL_ID)
+                    if log_channel:
+                        await log_channel.send(msg)
+                    continue
+                data = response.json()
             except Exception as e:
-                print(f"Error fetching Kick channel {slug}: {e}")
+                msg = f"⚠️ Error fetching Kick channel `{slug}`: {e}"
+                print(msg)
+                log_channel = self.bot.get_channel(LOGGING_CHANNEL_ID)
+                if log_channel:
+                    await log_channel.send(msg)
                 continue
 
             livestream = data.get("livestream")
