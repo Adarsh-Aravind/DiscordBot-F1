@@ -189,20 +189,20 @@ class Milestones(commands.Cog):
                         continue
                     data = resp.json()
 
-                # Kick's field naming has varied; accept either form.
-                count = data.get("followersCount")
-                if count is None:
-                    count = data.get("followers_count")
-                if count is None:
-                    continue
+                    # Kick's field naming has varied; accept either form.
+                    count = data.get("followersCount")
+                    if count is None:
+                        count = data.get("followers_count")
+                    if count is None:
+                        continue
 
-                user = data.get("user") or {}
-                name = user.get("username") or slug
-                url = f"https://kick.com/{slug}"
-                await self._process(
-                    channel, "kick", slug, name, int(count), url,
-                    discord.Color.from_rgb(83, 252, 24), "followers"
-                )
+                    user = data.get("user") or {}
+                    name = user.get("username") or slug
+                    url = f"https://kick.com/{slug}"
+                    await self._process(
+                        channel, "kick", slug, name, int(count), url,
+                        discord.Color.from_rgb(83, 252, 24), "followers"
+                    )
             except Exception as e:
                 print(f"Error checking Kick milestone for {slug}: {e}")
 
