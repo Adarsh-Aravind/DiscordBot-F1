@@ -203,8 +203,8 @@ class Milestones(commands.Cog):
                         channel, "kick", slug, name, int(count), url,
                         discord.Color.from_rgb(83, 252, 24), "followers"
                     )
-            except Exception as e:
-                print(f"Error checking Kick milestone for {slug}: {e}")
+                except Exception as e:
+                    print(f"Error checking Kick milestone for {slug}: {e}")
 
     @tasks.loop(minutes=CHECK_INTERVAL_MINUTES)
     async def check(self):
