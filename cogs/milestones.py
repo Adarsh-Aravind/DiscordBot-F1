@@ -6,7 +6,7 @@ import os
 
 # Reuse the single source of truth for which channels/slugs we track.
 from cogs.youtube import CHANNELS as YT_CHANNELS
-from cogs.kick import CHANNELS as KICK_CHANNELS, HEADERS as KICK_HEADERS
+from cogs.kick import CHANNELS as KICK_CHANNELS
 
 # Where milestone announcements are posted.
 MILESTONE_CHANNEL_ID = int(os.getenv("MILESTONE_CHANNEL", 730340430155219024))
@@ -176,16 +176,18 @@ class Milestones(commands.Cog):
     # Kick
     # ------------------------------------------------------------------ #
     async def _check_kick(self, channel, session):
-        for slug in KICK_CHANNELS:
-            try:
-                async with session.get(
-                    f"https://kick.com/api/v2/channels/{slug}",
-                    headers=KICK_HEADERS,
-                    timeout=aiohttp.ClientTimeout(total=15),
-                ) as resp:
-                    if resp.status != 200:
+        from curl_cffi.requests import AsyncSession
+        # Kick requires curl_cffi to bypass Cloudflare
+        async with AsyncSession(impersonate="chrome") as curl_session:
+            for slug in KICK_CHANNELS:
+                try:
+                    resp = await curl_session.get(
+                        f"https://kick.com/api/v2/channels/{slug}",
+                        timeout=15,
+                    )
+                    if resp.status_code != 200:
                         continue
-                    data = await resp.json()
+                    data = resp.json()
 
                 # Kick's field naming has varied; accept either form.
                 count = data.get("followersCount")
