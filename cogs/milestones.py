@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 import aiohttp
 import feedparser
+import logging
 import os
 
 # Reuse the single source of truth for which channels/slugs we track.
@@ -212,9 +213,13 @@ class Milestones(commands.Cog):
         if not channel:
             return
 
-        session = await self._get_session()
-        await self._check_youtube(channel, session)
-        await self._check_kick(channel, session)
+        # Keep an unhandled failure from permanently stopping the loop.
+        try:
+            session = await self._get_session()
+            await self._check_youtube(channel, session)
+            await self._check_kick(channel, session)
+        except Exception:
+            logging.exception("Milestone check failed")
 
     @check.before_loop
     async def before_check(self):

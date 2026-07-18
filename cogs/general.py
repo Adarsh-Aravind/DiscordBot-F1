@@ -20,7 +20,8 @@ class General(commands.Cog):
         embed.add_field(name="📊 Leveling", value="`#rank [@user]` - Show level, XP and position\n`#leaderboard` (`#top`) - Top 10 members by XP", inline=False)
         embed.add_field(name="🛡️ Moderation", value="`#warn @user [reason]` - Warn a member\n`#warnings @user` - List a member's warnings\n`#clearwarns @user` - Clear all warnings\n`#delwarn <id>` - Remove a single warning", inline=False)
         embed.add_field(name="⚙️ General", value="`#status` - Shows the status of the server\n`#ping` - Shows the bot's latency\n*Most commands also work as `/` slash commands.*", inline=False)
-        embed.add_field(name="🔔 Automatic", value="These run in the background — no command needed:\n• **YouTube alerts** - Posts when tracked channels upload a new video\n• **Kick live alerts** - Posts when a tracked streamer goes live\n• **Creator milestones** - Announces subscriber/follower milestones\n• **Auto-moderation** - Filters spam, link/mention abuse and enforces promo channel rules", inline=False)
+        embed.add_field(name="🔔 Automatic", value="These run in the background — no command needed:\n• **YouTube alerts** - Posts when tracked channels upload a new video\n• **Kick live alerts** - Posts when a tracked streamer goes live\n• **Creator milestones** - Announces subscriber/follower milestones\n• **Auto-moderation** - Blocks flooding, repeated messages, invites, mass mentions and emoji spam", inline=False)
+        embed.set_footer(text="XP is awarded once per minute, so chatting normally is what counts.")
 
         await ctx.send(embed=embed)
 
@@ -44,11 +45,9 @@ class General(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="sync")
+    @commands.is_owner()
     async def sync(self, ctx):
         """Register slash commands. Run once (owner only) after deploying."""
-        if not await self.bot.is_owner(ctx.author):
-            return
-
         if ctx.guild:
             # Guild sync is instant (global sync can take up to an hour).
             self.bot.tree.copy_global_to(guild=ctx.guild)
@@ -59,10 +58,8 @@ class General(commands.Cog):
         await ctx.send(f"✅ Synced {len(synced)} slash command(s).")
 
     @commands.command(name="setpresence")
+    @commands.is_owner()
     async def set_presence(self, ctx, activity_type: str, *, text: str):
-        if not await self.bot.is_owner(ctx.author):
-            return
-
         activity_type = activity_type.lower()
 
         if activity_type == "playing":

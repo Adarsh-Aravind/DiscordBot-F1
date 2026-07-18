@@ -3,7 +3,6 @@ aiohttp==3.13.3
 aiosignal==1.4.0
 aiosqlite==0.22.1
 attrs==25.4.0
-discord==2.3.2
 discord.py==2.7.0
 feedparser==6.0.12
 frozenlist==1.8.0
@@ -15,4 +14,4 @@ python-dotenv==1.2.2
 pytz==2026.1.post1
 sgmllib3k==1.0.0
 yarl==1.23.0
-curl_cffi
+curl_cffi==0.15.0

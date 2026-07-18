@@ -13,6 +13,10 @@ logging.basicConfig(level=logging.INFO)
 
 intents = discord.Intents.default()
 intents.message_content = True
+# Needed so member lookups by name/nickname work (e.g. `#rank someone`,
+# `#warn someone`) instead of only by mention/ID, and so role checks read from
+# a warm cache. Enable "Server Members Intent" in the Discord developer portal.
+intents.members = True
 
 # Both server owners/operators. is_owner() recognises either of these.
 OWNER_IDS = {615174036733034538, 506838802317443072}
@@ -106,6 +110,28 @@ async def setup_hook():
         await bot.load_extension(ext)
 
 @bot.event
+async def close_hook():
+    # Flush and close SQLite cleanly so a WAL checkpoint happens on shutdown.
+    db = getattr(bot, "db", None)
+    if db is not None:
+        try:
+            await db.close()
+        except Exception:
+            logging.exception("Failed to close the database cleanly")
+
+
+_original_close = bot.close
+
+
+async def _close():
+    await close_hook()
+    await _original_close()
+
+
+bot.close = _close
+
+
+@bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
@@ -167,4 +193,15 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 bot.tree.on_error = on_app_command_error
 
 def run():
+    if not TOKEN:
+        raise SystemExit(
+            "DISCORD_TOKEN is not set. Create a .env file next to main.py "
+            "containing DISCORD_TOKEN=your_bot_token_here"
+        )
     bot.run(TOKEN, reconnect=True)
+
+
+# start.sh and the README both invoke `python3 main.py` directly, so main has
+# to be runnable on its own (app.py stays as an alternative entrypoint).
+if __name__ == "__main__":
+    run()

@@ -2,6 +2,15 @@ import discord
 from discord.ext import commands
 import random
 import math
+import time
+
+# Minimum seconds between two XP-earning messages from the same user. Without
+# this, XP tracks raw message count (rewarding one-word spam) and every single
+# message costs a database write.
+XP_COOLDOWN_SECONDS = 60
+
+# Messages shorter than this earn nothing — stops "a", "b", "c" farming.
+MIN_MESSAGE_LENGTH = 3
 
 # Level thresholds -> role id awarded on reaching that level.
 # Roles are cumulative (a Beast keeps Regular too). Adjust freely.
@@ -14,6 +23,7 @@ LEVEL_ROLES = {
 class Leveling(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self._last_xp = {}  # user_id -> monotonic timestamp of last XP award
 
     async def _apply_role_rewards(self, member, level):
         """Grant any level-reward roles the member has now earned."""
@@ -42,6 +52,18 @@ class Leveling(commands.Cog):
     async def on_message(self, message):
         if message.author.bot or not message.guild:
             return
+
+        # Commands shouldn't pay XP, and neither should trivial filler.
+        if message.content.startswith(self.bot.command_prefix):
+            return
+        if len(message.content.strip()) < MIN_MESSAGE_LENGTH:
+            return
+
+        now = time.monotonic()
+        last = self._last_xp.get(message.author.id)
+        if last is not None and now - last < XP_COOLDOWN_SECONDS:
+            return
+        self._last_xp[message.author.id] = now
 
         xp_gain = random.randint(5, 10)
 
@@ -131,20 +153,35 @@ class Leveling(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def levelreset(self, ctx, user: discord.Member = None):
-        if not await self.bot.is_owner(ctx.author):
+    @commands.is_owner()
+    async def levelreset(self, ctx, target: str = None):
+        """`#levelreset @user` resets one member; `#levelreset all` wipes everyone."""
+        if target is None:
+            await ctx.send(
+                "Usage: `#levelreset @user` to reset one member, or "
+                "`#levelreset all` to wipe **everyone's** progress."
+            )
             return
 
-        if user:
-            await self.bot.db.execute(
-                "DELETE FROM levels WHERE user_id = ?",
-                (user.id,)
-            )
-        else:
+        if target.lower() == "all":
+            async with self.bot.db.execute("SELECT COUNT(*) FROM levels") as cursor:
+                (count,) = await cursor.fetchone()
             await self.bot.db.execute("DELETE FROM levels")
+            await self.bot.db.commit()
+            self._last_xp.clear()
+            await ctx.send(f"🧹 Reset levels for **{count}** member(s).")
+            return
 
+        try:
+            member = await commands.MemberConverter().convert(ctx, target)
+        except commands.BadArgument:
+            await ctx.send("❌ Couldn't find that member. Use a mention, ID, or `all`.")
+            return
+
+        await self.bot.db.execute("DELETE FROM levels WHERE user_id = ?", (member.id,))
         await self.bot.db.commit()
-        await ctx.send("Levels reset.")
+        self._last_xp.pop(member.id, None)
+        await ctx.send(f"🧹 Reset levels for {member.mention}.")
 
 
 async def setup(bot):
