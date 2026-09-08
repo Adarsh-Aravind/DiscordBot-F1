@@ -92,8 +92,16 @@ The default command prefix is `#`.
 *   `#reply <user_id> <message>`: Sends a direct message to a user.
 *   `#say <channel_id> <message>`: Relays a message to a specific channel.
 *   `#setpresence <type> <text>`: Updates the bot's rich presence status.
-*   `#levelreset <@user|all>`: Resets XP for one member, or `all` to wipe everyone.
+*   `#levelreset <@user>`: Resets XP for one member.
+*   `#levelreset all confirm`: Wipes everyone's XP. Without the trailing `confirm` it only reports how many members would be affected — there is no undo.
 *   `#sync`: Registers slash commands with Discord (run once after deploying).
+*   `#notifypanel`: Posts the Upload Squad / Stream Squad self-assign panel. Run once, in your roles channel.
+*   `#notifycount`: Shows how many members opted into each notification role.
+
+### Moderator commands
+
+*   `#raidmode <on|off>`: Forces heightened raid checks on or off. No argument shows current state.
+*   `#raidstatus`: Current join rate, raid-watch state and tracked message count.
 *   `#warn <member> <reason>`: Warns a member and applies auto-timeouts on specific thresholds.
 *   `#warnings <member>`: Lists a member's warnings.
 *   `#clearwarns <member>`: Clears all warnings for a member.

@@ -20,7 +20,8 @@ class General(commands.Cog):
         embed.add_field(name="📊 Leveling", value="`#rank [@user]` - Show level, XP and position\n`#leaderboard` (`#top`) - Top 10 members by XP", inline=False)
         embed.add_field(name="🛡️ Moderation", value="`#warn @user [reason]` - Warn a member\n`#warnings @user` - List a member's warnings\n`#clearwarns @user` - Clear all warnings\n`#delwarn <id>` - Remove a single warning", inline=False)
         embed.add_field(name="⚙️ General", value="`#status` - Shows the status of the server\n`#ping` - Shows the bot's latency\n*Most commands also work as `/` slash commands.*", inline=False)
-        embed.add_field(name="🔔 Automatic", value="These run in the background — no command needed:\n• **YouTube alerts** - Posts when tracked channels upload a new video\n• **Kick live alerts** - Posts when a tracked streamer goes live\n• **Creator milestones** - Announces subscriber/follower milestones\n• **Auto-moderation** - Blocks flooding, repeated messages, invites, mass mentions and emoji spam", inline=False)
+        embed.add_field(name="🔔 Automatic", value="These run in the background — no command needed:\n• **YouTube alerts** - Posts new videos (Shorts kept separate) and opens a discussion thread\n• **Kick live alerts** - Posts when a tracked streamer goes live\n• **Creator milestones** - Announces subscriber/follower milestones\n• **Auto-moderation** - Blocks flooding, repeated messages, scam links, invites, mass mentions and emoji spam\n• **Raid protection** - Catches coordinated spam from multiple accounts", inline=False)
+        embed.add_field(name="🔕 Pings", value="Upload and live alerts only ping people who opted in.\nGrab **Upload Squad** / **Stream Squad** from the roles channel to be notified.", inline=False)
         embed.set_footer(text="XP is awarded once per minute, so chatting normally is what counts.")
 
         await ctx.send(embed=embed)

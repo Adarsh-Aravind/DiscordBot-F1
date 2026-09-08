@@ -12,6 +12,9 @@ XP_COOLDOWN_SECONDS = 60
 # Messages shorter than this earn nothing — stops "a", "b", "c" farming.
 MIN_MESSAGE_LENGTH = 3
 
+# Only bother pruning the cooldown map once it has grown past this many users.
+SWEEP_THRESHOLD = 500
+
 # Level thresholds -> role id awarded on reaching that level.
 # Roles are cumulative (a Beast keeps Regular too). Adjust freely.
 LEVEL_ROLES = {
@@ -24,6 +27,25 @@ class Leveling(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._last_xp = {}  # user_id -> monotonic timestamp of last XP award
+
+    def _is_command(self, content):
+        """True if the message starts with a command prefix. command_prefix may
+        be a string, an iterable of strings, or a callable, so don't assume."""
+        prefix = self.bot.command_prefix
+        if callable(prefix):
+            return False  # can't resolve without invoking it; let the XP stand
+        if isinstance(prefix, str):
+            return content.startswith(prefix)
+        return any(content.startswith(p) for p in prefix)
+
+    def _sweep(self, now):
+        """Cooldown entries older than the window can never block an award, so
+        drop them instead of keeping a row for every user who ever spoke."""
+        if len(self._last_xp) < SWEEP_THRESHOLD:
+            return
+        cutoff = now - XP_COOLDOWN_SECONDS
+        for uid in [u for u, ts in self._last_xp.items() if ts < cutoff]:
+            del self._last_xp[uid]
 
     async def _apply_role_rewards(self, member, level):
         """Grant any level-reward roles the member has now earned."""
@@ -54,7 +76,7 @@ class Leveling(commands.Cog):
             return
 
         # Commands shouldn't pay XP, and neither should trivial filler.
-        if message.content.startswith(self.bot.command_prefix):
+        if self._is_command(message.content):
             return
         if len(message.content.strip()) < MIN_MESSAGE_LENGTH:
             return
@@ -64,6 +86,7 @@ class Leveling(commands.Cog):
         if last is not None and now - last < XP_COOLDOWN_SECONDS:
             return
         self._last_xp[message.author.id] = now
+        self._sweep(now)
 
         xp_gain = random.randint(5, 10)
 
@@ -154,18 +177,29 @@ class Leveling(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
-    async def levelreset(self, ctx, target: str = None):
-        """`#levelreset @user` resets one member; `#levelreset all` wipes everyone."""
+    async def levelreset(self, ctx, target: str = None, confirm: str = None):
+        """`#levelreset @user` resets one member; `#levelreset all confirm` wipes everyone."""
         if target is None:
             await ctx.send(
                 "Usage: `#levelreset @user` to reset one member, or "
-                "`#levelreset all` to wipe **everyone's** progress."
+                "`#levelreset all confirm` to wipe **everyone's** progress."
             )
             return
 
         if target.lower() == "all":
             async with self.bot.db.execute("SELECT COUNT(*) FROM levels") as cursor:
                 (count,) = await cursor.fetchone()
+
+            # There is no undo for this, so a bare `#levelreset all` only ever
+            # reports what it would delete.
+            if confirm is None or confirm.lower() != "confirm":
+                await ctx.send(
+                    f"⚠️ This would erase levels and XP for **{count}** member(s) "
+                    f"and **cannot be undone**.\n"
+                    f"Run `#levelreset all confirm` if you're sure."
+                )
+                return
+
             await self.bot.db.execute("DELETE FROM levels")
             await self.bot.db.commit()
             self._last_xp.clear()

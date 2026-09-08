@@ -7,6 +7,8 @@ import logging
 
 import os
 
+from cogs.notifications import UPLOAD_ROLE_ID, role_mention
+
 # YouTube channel id -> Discord channel id to announce uploads in.
 # Names are verified against each feed's title; don't reorder these by eye.
 # A Bit-Beast and ByteBeast intentionally share one Discord channel.
@@ -19,16 +21,50 @@ CHANNELS = {
 
 # Unconfigured entries (env var missing -> 0) are skipped rather than logged
 # as a missing channel every cycle.
-CHANNELS = {yt: ch for yt, ch in CHANNELS.items() if ch}
+_CONFIGURED = {yt: ch for yt, ch in CHANNELS.items() if ch}
+_MISSING = [yt for yt in CHANNELS if yt not in _CONFIGURED]
+CHANNELS = _CONFIGURED
 
 # Retry transient failures (e.g. DNS blips) before giving up on this cycle
 FETCH_RETRIES = 3
 RETRY_BACKOFF = 3  # seconds between attempts
 
+# --- Shorts handling -------------------------------------------------------
+# The RSS feed doesn't say whether an entry is a Short, so a channel posting
+# Shorts daily and long-form weekly would ping the same way for both and train
+# people to ignore the pings. Optionally route Shorts to their own channel;
+# either way they don't ping by default.
+SHORTS_CHANNEL_ID = int(os.getenv("YT_SHORTS_CHANNEL", 0))
+PING_ON_SHORTS = os.getenv("YT_PING_ON_SHORTS", "false").lower() in ("1", "true", "yes")
+
+# --- Discussion threads ----------------------------------------------------
+# One thread per upload keeps video talk out of general chat and gives each
+# video a lasting home. Shorts are excluded by default: too many, too small.
+AUTO_THREAD = os.getenv("YT_AUTO_THREAD", "true").lower() in ("1", "true", "yes")
+AUTO_THREAD_SHORTS = os.getenv("YT_AUTO_THREAD_SHORTS", "false").lower() in ("1", "true", "yes")
+# 1440 = 24h. 4320/10080 need a boosted server on older guilds; 1440 always works.
+THREAD_ARCHIVE_MINUTES = 1440
+
 class YouTube(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.session = None
+
+        # The YT_* env vars were renamed from YT_CHANNEL_1/2/3. A stale .env
+        # leaves CHANNELS empty, which would otherwise disable upload alerts
+        # with no sign anything was wrong.
+        if not CHANNELS:
+            logging.warning(
+                "YouTube: no channels configured - upload alerts are DISABLED. "
+                "Set YT_ABITBEAST / YT_LETSBEAST / YT_BYTEBEAST / YT_REDSHIF8 "
+                "in .env (these replaced YT_CHANNEL_1/2/3)."
+            )
+        elif _MISSING:
+            logging.warning(
+                "YouTube: %d of %d channels unconfigured, skipping: %s",
+                len(_MISSING), len(_MISSING) + len(CHANNELS), ", ".join(_MISSING)
+            )
+
         self.check.start()
 
     async def cog_load(self):
@@ -115,14 +151,71 @@ class YouTube(commands.Cog):
             if has_history is None:
                 continue
 
-            embed = discord.Embed(
-                title=f"🎥 {entry.author} just posted a video! Go check it out!",
-                description=f"**[{entry.title}](https://www.youtube.com/watch?v={video_id})**",
-                color=discord.Color.red()
-            )
-            embed.set_image(url=await self._thumbnail_url(video_id))
+            await self._announce(channel, entry, video_id)
 
-            await channel.send(content="Hey! @everyone", embed=embed)
+    async def _announce(self, channel, entry, video_id):
+        is_short = await self._is_short(video_id)
+
+        # Shorts get their own channel when one is configured, otherwise they
+        # sit alongside uploads but stay quiet.
+        target = channel
+        if is_short and SHORTS_CHANNEL_ID:
+            target = self.bot.get_channel(SHORTS_CHANNEL_ID) or channel
+
+        if is_short:
+            title = f"📱 {entry.author} posted a Short!"
+            url = f"https://www.youtube.com/shorts/{video_id}"
+            color = discord.Color.from_rgb(255, 0, 80)
+        else:
+            title = f"🎥 {entry.author} just posted a video! Go check it out!"
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            color = discord.Color.red()
+
+        embed = discord.Embed(
+            title=title,
+            description=f"**[{entry.title}]({url})**",
+            color=color,
+        )
+        embed.set_image(url=await self._thumbnail_url(video_id))
+
+        ping = "" if (is_short and not PING_ON_SHORTS) else role_mention(target.guild, UPLOAD_ROLE_ID)
+
+        message = await target.send(
+            content=ping or None,
+            embed=embed,
+            # Belt and braces: even if a ping string were ever wrong, this
+            # makes it impossible for an announcement to hit @everyone.
+            allowed_mentions=discord.AllowedMentions(roles=True, everyone=False, users=False),
+        )
+        await self._open_thread(message, entry.title, is_short)
+
+    async def _open_thread(self, message, video_title, is_short):
+        if not AUTO_THREAD or (is_short and not AUTO_THREAD_SHORTS):
+            return
+        try:
+            await message.create_thread(
+                name=(video_title or "New upload")[:90],
+                auto_archive_duration=THREAD_ARCHIVE_MINUTES,
+            )
+        except discord.HTTPException:
+            # Missing Create Public Threads, or the channel type can't host
+            # them. Not worth failing the announcement over.
+            logging.warning("Could not open a discussion thread for %s", video_title)
+
+    async def _is_short(self, video_id):
+        """youtube.com/shorts/<id> answers 200 for a real Short and redirects
+        to /watch for anything else, so a non-following HEAD tells them apart
+        without an API key. On any error assume long-form — a Short announced
+        as a video is a much smaller problem than a video announced silently."""
+        try:
+            async with self.session.head(
+                f"https://www.youtube.com/shorts/{video_id}",
+                allow_redirects=False,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
 
     async def _thumbnail_url(self, video_id):
         """maxresdefault doesn't exist for every upload (notably Shorts and

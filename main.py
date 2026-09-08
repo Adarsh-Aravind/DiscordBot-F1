@@ -100,7 +100,9 @@ async def setup_hook():
         "cogs.general",
         "cogs.messaging",
         "cogs.leveling",
+        "cogs.notifications",
         "cogs.antispam",
+        "cogs.raidguard",
         "cogs.youtube",
         "cogs.kick",
         "cogs.f1",
@@ -109,11 +111,12 @@ async def setup_hook():
     ]:
         await bot.load_extension(ext)
 
-@bot.event
-async def close_hook():
+# Not a discord.py event — just a helper the close wrapper below calls.
+async def close_database():
     # Flush and close SQLite cleanly so a WAL checkpoint happens on shutdown.
     db = getattr(bot, "db", None)
     if db is not None:
+        bot.db = None
         try:
             await db.close()
         except Exception:
@@ -124,8 +127,11 @@ _original_close = bot.close
 
 
 async def _close():
-    await close_hook()
+    # Order matters: Bot.close() unloads every extension, which cancels the
+    # tasks.loop pollers. Closing the database first would leave an in-flight
+    # loop iteration querying a dead connection.
     await _original_close()
+    await close_database()
 
 
 bot.close = _close
@@ -158,6 +164,11 @@ async def on_command_error(ctx, error):
         return
     if isinstance(error, (commands.BadArgument, commands.UserInputError)):
         await ctx.send("❌ Invalid input. Please check the command and try again.")
+        return
+    # Owner-only commands stayed invisible to everyone else before they moved
+    # to @commands.is_owner(); keep them that way rather than advertising
+    # #say / #reply / #sync / #setpresence / #levelreset to the whole server.
+    if isinstance(error, commands.NotOwner):
         return
     if isinstance(error, commands.MissingPermissions) or isinstance(error, commands.CheckFailure):
         await ctx.send("🚫 You don't have permission to use this command.")

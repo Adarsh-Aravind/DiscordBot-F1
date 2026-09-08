@@ -7,6 +7,8 @@ import logging
 from datetime import datetime
 import pytz
 
+from cogs.notifications import STREAM_ROLE_ID, role_mention
+
 # Don't re-post the same class of failure to the log channel more than once
 # per half hour.
 ERROR_LOG_COOLDOWN_SECONDS = 1800
@@ -33,17 +35,22 @@ class Kick(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._session = None
-        self._last_error_log = 0.0
+        # (slug, kind) -> monotonic timestamp of the last Discord post for it.
+        self._last_error_log = {}
         self.check.start()
 
-    async def _log_error(self, msg):
+    async def _log_error(self, slug, kind, msg):
         """Print always, but only re-post to Discord occasionally — a Kick
-        outage would otherwise flood the log channel every 2 minutes."""
-        print(msg)
+        outage would otherwise flood the log channel every 2 minutes. The
+        cooldown is per (slug, failure kind) so a new problem on one channel
+        still gets through while another channel is busy failing."""
+        logging.warning(msg)
         now = time.monotonic()
-        if now - self._last_error_log < ERROR_LOG_COOLDOWN_SECONDS:
+        key = (slug, kind)
+        last = self._last_error_log.get(key)
+        if last is not None and now - last < ERROR_LOG_COOLDOWN_SECONDS:
             return
-        self._last_error_log = now
+        self._last_error_log[key] = now
         log_channel = self.bot.get_channel(LOGGING_CHANNEL_ID)
         if log_channel:
             try:
@@ -93,11 +100,19 @@ class Kick(commands.Cog):
                 timeout=15,
             )
             if response.status_code != 200:
-                await self._log_error(f"⚠️ Kick API returned `{response.status_code}` for `{slug}`")
+                await self._log_error(
+                    slug,
+                    f"http-{response.status_code}",
+                    f"⚠️ Kick API returned `{response.status_code}` for `{slug}`",
+                )
                 return
             data = response.json()
         except Exception as e:
-            await self._log_error(f"⚠️ Error fetching Kick channel `{slug}`: {e}")
+            await self._log_error(
+                slug,
+                type(e).__name__,
+                f"⚠️ Error fetching Kick channel `{slug}`: {e}",
+            )
             return
 
         livestream = data.get("livestream")
@@ -146,7 +161,11 @@ class Kick(commands.Cog):
         if first_seen:
             return
 
-        await channel.send(content="Hey! @everyone", embed=self._build_embed(slug, data, livestream))
+        await channel.send(
+            content=role_mention(channel.guild, STREAM_ROLE_ID) or None,
+            embed=self._build_embed(slug, data, livestream),
+            allowed_mentions=discord.AllowedMentions(roles=True, everyone=False, users=False),
+        )
 
     def _build_embed(self, slug, data, livestream):
         user = data.get("user") or {}
