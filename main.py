@@ -107,7 +107,8 @@ async def setup_hook():
         "cogs.kick",
         "cogs.f1",
         "cogs.warnings",
-        "cogs.milestones"
+        "cogs.milestones",
+        "cogs.heartbeat"
     ]:
         await bot.load_extension(ext)
 
