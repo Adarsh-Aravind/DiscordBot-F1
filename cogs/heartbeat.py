@@ -1,7 +1,7 @@
 """Status heartbeat for the "Live Ops" panel on adarsharavind.com.
 
-Every minute the bot POSTs a small "I'm alive" ping to the ops-status Edge
-Function. The portfolio shows the bot as offline once pings stop for ~3
+Every minute the bot POSTs a small "I'm alive" ping to the ops-status server
+on the home server. The portfolio shows the bot as offline once pings stop for ~3
 minutes, so a crashed process or a dropped gateway connection both show up.
 
 Disabled unless STATUS_HEARTBEAT_URL and STATUS_HEARTBEAT_TOKEN are set.
